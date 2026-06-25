@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Flappy Bird Vanilla JS - Mobile Jumpscare Edition</title>
+
+    <style>
+      body {
+        margin: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background: #70c5ce;
+        font-family: Arial, sans-serif;
+        overflow: hidden;
+        /* Mencegah double-tap zoom di beberapa browser mobile */
+        touch-action: manipulation;
+      }
+
+      canvas {
+        background: #4ec0ca;
+        border: 2px solid #000;
+        box-shadow: 0px 0px 20px #0004;
+        /* Membuat canvas responsif di layar HP */
+        max-width: 100%;
+        max-height: 100vh;
+        aspect-ratio: 400 / 600;
+      }
+
+      #startText {
+        position: absolute;
+        font-size: 20px;
+        color: white;
+        text-shadow: 2px 2px 5px black;
+        top: 40px;
+        pointer-events: none;
+        text-align: center;
+        width: 100%;
+        white-space: pre-line; /* Agar bisa membaca \n (baris baru) */
+      }
+
+      #jumpscareOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        object-fit: cover;
+        z-index: 999;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="startText">Tap Layar / Tekan SPACE untuk Mulai</div>
+    <canvas id="game" width="400" height="600"></canvas>
+
+    <img id="jumpscareOverlay" src="7812731.jpeg" alt="Boo!" />
+    <audio id="scareSound" src="1234432.mpeg" preload="auto"></audio>
+
+    <script>
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const jumpscareImg = document.getElementById("jumpscareOverlay");
+      const scareSound = document.getElementById("scareSound");
+
+      let bird = {
+        x: 60,
+        y: canvas.height / 2,
+        width: 30,
+        height: 30,
+        gravity: 0.4,
+        velocity: 0,
+        jump: 7,
+      };
+
+      let pipes = [];
+      let frame = 0;
+      let score = 0;
+      let gameStarted = false;
+      let gameOver = false;
+      let isJumpscareActive = false;
+
+      function drawBird() {
+        ctx.fillStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(bird.x, bird.y, bird.width / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      function drawPipe(pipe) {
+        ctx.fillStyle = "green";
+        ctx.fillRect(pipe.x, 0, pipe.width, pipe.top);
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(pipe.x, 0, pipe.width, pipe.top);
+
+        ctx.fillRect(
+          pipe.x,
+          canvas.height - pipe.bottom,
+          pipe.width,
+          pipe.bottom,
+        );
+        ctx.strokeRect(
+          pipe.x,
+          canvas.height - pipe.bottom,
+          pipe.width,
+          pipe.bottom,
+        );
+      }
+
+      function createPipe() {
+        let gap = 150;
+        let top = Math.random() * (canvas.height - gap - 150) + 50;
+        let bottom = canvas.height - top - gap;
+
+        pipes.push({
+          x: canvas.width,
+          width: 50,
+          top: top,
+          bottom: bottom,
+          passed: false,
+        });
+      }
+
+      function triggerJumpscare() {
+        isJumpscareActive = true;
+        gameOver = true;
+
+        jumpscareImg.style.display = "block";
+        scareSound
+          .play()
+          .catch((e) => console.log("Audio diblokir browser mobile:", e));
+
+        setTimeout(() => {
+          jumpscareImg.style.display = "none";
+          isJumpscareActive = false;
+          endGame();
+        }, 2000);
+      }
+
+      function updateBird() {
+        bird.velocity += bird.gravity;
+        bird.y += bird.velocity;
+
+        if (
+          bird.y + bird.width / 2 > canvas.height ||
+          bird.y - bird.width / 2 < 0
+        ) {
+          endGame();
+        }
+      }
+
+      function updatePipes() {
+        for (let i = 0; i < pipes.length; i++) {
+          pipes[i].x -= 2;
+
+          if (
+            bird.x + bird.width / 2 > pipes[i].x &&
+            bird.x - bird.width / 2 < pipes[i].x + pipes[i].width &&
+            (bird.y - bird.width / 2 < pipes[i].top ||
+              bird.y + bird.width / 2 > canvas.height - pipes[i].bottom)
+          ) {
+            endGame();
+          }
+
+          if (
+            !pipes[i].passed &&
+            pipes[i].x + pipes[i].width < bird.x - bird.width / 2
+          ) {
+            score++;
+            pipes[i].passed = true;
+
+            if (score === 2) {
+              triggerJumpscare();
+              return;
+            }
+          }
+        }
+
+        pipes = pipes.filter((pipe) => pipe.x + pipe.width > 0);
+        if (frame % 120 === 0) createPipe();
+      }
+
+      function endGame() {
+        if (isJumpscareActive) return;
+
+        gameOver = true;
+        gameStarted = false;
+        document.getElementById("startText").innerText =
+          `Kaget Ya? 😂 Score: ${score}\nTap Layar untuk Restart`;
+      }
+
+      function resetGame() {
+        bird.y = canvas.height / 2;
+        bird.velocity = 0;
+        pipes = [];
+        score = 0;
+        frame = 0;
+        gameOver = false;
+        gameStarted = false;
+        jumpscareImg.style.display = "none";
+      }
+
+      function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!gameStarted && !gameOver) {
+          drawBird();
+          ctx.fillStyle = "white";
+          ctx.font = "bold 30px Arial";
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 4;
+          ctx.strokeText("Score: " + score, 20, 50);
+          ctx.fillText("Score: " + score, 20, 50);
+          requestAnimationFrame(loop);
+          return;
+        }
+
+        if (!gameOver) {
+          updateBird();
+          updatePipes();
+          frame++;
+        }
+
+        pipes.forEach(drawPipe);
+        drawBird();
+
+        ctx.fillStyle = "white";
+        ctx.font = "bold 30px Arial";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 4;
+        ctx.strokeText("Score: " + score, 20, 50);
+        ctx.fillText("Score: " + score, 20, 50);
+
+        requestAnimationFrame(loop);
+      }
+
+      // FUNGSI UTAMA UNTUK INPUT ACTION (Bisa dipakai di Desktop & Mobile)
+      function handleAction() {
+        if (isJumpscareActive) return;
+
+        if (!gameStarted && !gameOver) {
+          gameStarted = true;
+          document.getElementById("startText").innerText = "";
+        } else if (gameOver) {
+          resetGame();
+          document.getElementById("startText").innerText = "Tap untuk Mulai";
+        } else {
+          bird.velocity = -bird.jump;
+        }
+      }
+
+      // Event Listener untuk Keyboard (Desktop)
+      document.addEventListener("keydown", function (e) {
+        if (e.code === "Space") {
+          e.preventDefault();
+          handleAction();
+        }
+      });
+
+      // Event Listener untuk Sentuhan (Mobile)
+      canvas.addEventListener("touchstart", function (e) {
+        e.preventDefault(); // Mencegah efek ghost click dan zoom otomatis
+        handleAction();
+      });
+
+      loop();
+    </script>
+  </body>
+</html>
